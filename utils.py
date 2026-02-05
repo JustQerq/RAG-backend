@@ -42,29 +42,21 @@ def create_index(collection: Collection, index_name: str, model: Dict) -> None:
             raise Exception(f"Error during index recreation: {str(e)}")
 
 
-def check_index_ready(collection: Collection, index_name: str) -> None:
+def check_index_ready(collection: Collection, index_name: str) -> tuple[bool, str]:
     """
-    Poll for index status until it's ready
+    Poll for index status
 
     Args:
         collection (Collection): Collection to check index status against
         index_name (str): Name of the index to check
     """
-    while True:
-        indexes = list(collection.list_search_indexes())
-        matching_indexes = [idx for idx in indexes if idx.get("name") == index_name]
-
-        if not matching_indexes:
-            print(f"{index_name} index not found")
-            time.sleep(SLEEP_TIMER)
-            continue
-
+    indexes = list(collection.list_search_indexes())
+    matching_indexes = [idx for idx in indexes if idx.get("name") == index_name]
+    
+    if matching_indexes:
         index = matching_indexes[0]
         status = index["status"]
         if status == "READY":
-            print(f"{index_name} index status: READY")
-            print(f"{index_name} index definition: {index['latestDefinition']}")
-            break
-
-        print(f"{index_name} index status: {status}")
-        time.sleep(SLEEP_TIMER)
+            return (True, str(index['latestDefinition']))
+    
+    return (False, "")
