@@ -12,3 +12,6 @@ wheels/
 
 # Datasets
 /dataset
+
+# Logs
+/logs
