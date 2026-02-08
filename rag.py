@@ -1,6 +1,7 @@
 import os
 import json
 import time
+from bson.objectid import ObjectId
 from datetime import datetime
 from utils import create_index, check_index_ready
 from pymongo import MongoClient
@@ -124,7 +125,7 @@ class DatabaseManager:
     def add_documents(self, documents: List[Dict], collection_name: str):
         collection = self.db[collection_name]
         result = collection.insert_many(documents)
-        return result.inserted_ids
+        return [str(id) for id in result.inserted_ids]
     
     def create_vector_search_index(self, collection_name, index_name='vector_index'):
         model = {
@@ -178,7 +179,7 @@ class DatabaseManager:
         results = self.db[collection_name].aggregate(pipeline)
         return results.to_list()
     
-    def retrieve_session_history(self, session_id: int, collection_name: str):
+    def retrieve_session_history(self, session_id: int, collection_name: str) -> List[Dict]:
         logger.info(f"Retrieving chat history for session_id={session_id}")
         try:
             cursor = self.db[collection_name].find({"session_id": session_id}).sort("timestamp", 1)
@@ -191,6 +192,15 @@ class DatabaseManager:
             messages = []
         
         return messages
+    
+    def save_feedback(self, answer_id: str, helpful: bool, collection_name: str):
+        filter = {'_id': ObjectId(answer_id)}
+        update = {'$set': {'helpful': helpful}}
+        try:
+            self.db[collection_name].update_one(filter=filter, update=update)
+            logger.info("Feedback saved")
+        except Exception as e:
+            logger.error(f"Feedback saving error: {e}")
 
 
 if __name__ == "__main__":

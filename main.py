@@ -3,7 +3,8 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from dotenv import load_dotenv
+import dns
+# from dotenv import load_dotenv
 from loguru import logger
 from prometheus_flask_exporter import PrometheusMetrics
 
@@ -19,8 +20,13 @@ app = Flask(__name__)
 CORS(app)
 metrics = PrometheusMetrics(app) # Metrics can be accessed via /metrics endpoint
 
-load_dotenv()
+# load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    logger.critical("MongoDB connection string not present in environment!")
+else:
+    logger.info(f"Connecting to MongoDB database with {MONGO_URI} connection string")
+
 db_manager = DatabaseManager(MONGO_URI, db_name='rag_discord')
 rag_manager = RAGManager(db_manager)
 
@@ -33,10 +39,11 @@ def home():
 @app.route('/rag-query', methods=['POST'])
 def generate_answer():
     data = request.get_json()
-    app.logger.info(f"Received data: {data}")
+    app.logger.info(f"Received RAG query request")
     if not data:
         logger.warning("No data provided in a rag-query request")
         return jsonify({'error': 'no data provided'}), 400
+    app.logger.info(f"Request data: {data}")
     
     try:
         session_id = int(data['session_id'])
@@ -50,6 +57,27 @@ def generate_answer():
     result = rag_manager.generate_answer(session_id, user_query, verbose)
     logger.info(f"Answer generated for session_id={session_id}, query='{user_query}', answer='{result['answer']}'")
     return jsonify(result), 200
+
+
+@app.route('/feedback', methods=['PUT'])
+def save_feedback():
+    data = request.get_json()
+    logger.info(f"Received feedback")
+    if not data:
+        logger.warning("No data provided in a feedback request")
+        return jsonify({'error': 'no data provided'}), 400
+    logger.info(f"Feedback data: {data}")
+    
+    try:
+        answer_id = str(data['answer_id'])
+        helpful = bool(data['helpful'])
+    except (KeyError, ValueError, AttributeError) as e:
+        logger.error(f"Error parsing feedback request data: {e}")
+        return jsonify({'error': 'invalid data types'}), 400
+    
+    db_manager.save_feedback(answer_id, helpful, 'chat_history')
+    
+    return jsonify({'message': 'Feedback successfully saved'}), 200
 
 
 @app.route('/add', methods=['POST'])
